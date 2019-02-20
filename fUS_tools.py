@@ -2,6 +2,10 @@ import numpy as np
 import sys
 import glob
 import h5py
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+import tifffile
+import scipy
 
 # TODO: Make something that imports the data from individual tiffs
 # Make something that imports the timeline files from mat
@@ -151,18 +155,65 @@ class matloader:
             #print('%s   %s' % (x, type(self.data[x]) ) )
 
 
-def play_movie(data, dims = {x: 0, y:1, t:2}):
+def play_movie(data):
     ''' Code for quickly playing a movie
     need to specify the x, y, and T dimensions'''
 
-
-    
     if isinstance(data, np.ndarray):
         images = []
-        for i in range(data.shape[dims['t']]):
-            images.append(np.squeeze(data[ ]))
+        for i in range(data.shape[0]):
+            images.append(np.squeeze(data[i, :, : ]))
+    fig = plt.figure()
+    animation.ArtistAnimation(fig, images, interval=500, blit=True, repeat_delay=1000)
+    #plt.show()
 
-    animation.ArtistAnimation(fig, images, interval=50, blit=True, repeat_delay=1000)
+def export_tiffs(data, outDir='', dims = [0,1,2]):
+    ''' dims takes as inpute the x y t dimensions'''
+
+    if outDir == '':
+        raise NotADirectoryError
+    else:
+        tifffile.imsave(outDir, np.transpose(data, [dims[2], dims[0], dims[1]]).astype('single') )
+
+def upsample_xyt(data, factor = 2):
+    '''Code will upsample an array of xyt by a given scaling factor'''
 
 
 
+def compute_fft(data , dims = [0,1,2]):
+    ''' Compute the fourier transform and plots the first 100 power and phase maps'''
+    reshaped = np.transpose(data, [dims[2], dims[0], dims[1]]); # Transpose to y, x, t
+    out = np.fft.fft(reshaped, axis = 0)
+    plt.figure()
+
+    for i in range(100):
+        plt.subplot(10,10,i+1); plt.imshow(np.abs(out[i,:,:]),cmap = 'gist_rainbow'); plt.axis('off')
+
+    plt.show()
+
+
+def parse_timestamps(signal, timestamps, thresh = 2.5, interval_between_experiments = 2, min_isi = 0.01, min_number_exp = 20):
+    ''' Takes as input a signal and a given timestamp array and will return a list of parsed experiments
+    with timestamsp corresponding to each experiment, interval_between sets the interval in between
+    each experiment to call a new experiment
+    '''
+    # Find timestamps of all stimulus frames..
+    times = timestamps[1:][np.logical_and(signal[1:]>thresh, signal[:-1]<=thresh)]
+    # Throw out ones that dont pass a mini isi
+    discard_idx = np.where(np.diff(times) < min_isi)[0] + 1;
+    times = np.delete(times, discard_idx)
+    
+    # Parse experiments
+    cuts = np.where(np.diff(times) > interval_between_experiments)[0]; # Anywhere it is inter-interval greater than interval represents a new experiment
+    exp_list = []; 
+    exp_list.append(times[:cuts[0]])
+    for i in range(len(cuts)):
+        if i == len(cuts)-1:
+            exp_list.append(times[cuts[i]+1: ] )
+        else:
+            exp_list.append(times[cuts[i]+1:cuts[i+1]+1 ] )
+
+    # Lastly throw out experiments that dont have the minimum number
+    out_list = [s for s in exp_list if len(s) >= min_number_exp]        
+
+    return out_list, times
