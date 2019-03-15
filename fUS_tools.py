@@ -27,12 +27,18 @@ class matloader:
     def _add_dtype_name(self, f, name):
         """Keep track of all dtypes and names in the HDF5 file using it."""
         global dtypes
+        #print(dtypes)
         dtype = f.dtype
-        if dtypes.has_key(dtype.name):
+        if dtype.name in dtypes.keys():
             dtypes[dtype.name].add(name)
         else:
             dtypes[dtype.name] = set([name])
         return
+        # if dtypes.has_key(dtype.name):
+        #     dtypes[dtype.name].add(name)
+        # else:
+        #     dtypes[dtype.name] = set([name])
+        # return
 
     def _string(self, seq):
         """Convert a sequence of integers into a single string."""
@@ -151,9 +157,9 @@ class matloader:
         for x in self.data.keys():
 
             if isinstance(self.data[x], np.ndarray):
-                print('{:<40s}{:<30s}{:<0s}'.format(x,type(self.data[x]),  str(self.data[x].shape) ) )
+                print('{:<40s}{:<30s}{:<0s}'.format(str(x),str(type(self.data[x])),  str(self.data[x].shape) ) )
             else:
-                print('{:<40s}{:<30s}'.format(x,type(self.data[x]) ) )
+                print('{:<40s}{:<30s}'.format(str(x),str(type(self.data[x])) ) )
 
             #print('%s   %s' % (x, type(self.data[x]) ) )
 
@@ -207,6 +213,8 @@ def bin_2d(data, factor):
     '''Takes as input a 3d array T x w x h and bins by a scalar factor
     '''
     t, y, x = data.shape;
+    print(t,y,x)
+
     if (y % factor != 0) or (x % factor != 0):
         if (y % factor != 0) and (x % factor != 0):
             data = data[:, :-(y % factor) , : -(x % factor)]
@@ -216,11 +224,8 @@ def bin_2d(data, factor):
             data = data[:, : , : -(x % factor)]
         t, y, x = data.shape;
 
-    out = data.reshape([t, y/factor, factor, x/factor, factor]).mean(-1).mean(2)
+    out = data.reshape([t, int(y/factor), factor, int(x/factor), factor]).mean(-1).mean(2)
     return out
-
-
-
 
 def compute_field_sign(ph_az, ph_ev, pw_az, pw_ev, filt_size = 1):
     '''Compute field sign map from the phase maps of azimuth and elevation
