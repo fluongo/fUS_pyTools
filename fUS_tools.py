@@ -9,12 +9,11 @@ import scipy
 from scipy.ndimage import gaussian_filter
 import matplotlib.colors as mcolors
 
-
-
 # TODO: Make something that imports the data from individual tiffs
 # Make something that imports the timeline files from mat
 # Make something that computes the fourier and plots the retinoptic maps
 # Maybe reuse the allen institute data...
+# Put all of this under io
 
 class matloader:
 
@@ -163,25 +162,21 @@ class matloader:
 
             #print('%s   %s' % (x, type(self.data[x]) ) )
 
-def export_tiffs(data, outDir='', dims = [0,1,2]):
-    ''' dims takes as inpute the x y t dimensions'''
+def export_tiffs(data, outDir='', dims = {'x':0, 'y':1, 't':2} ):
+    ''' dims takes as input the x y t dimensions, e.g. if input is T x Y x X, then it is [2, 1, 0]'''
 
     if outDir == '':
         raise NotADirectoryError
     else:
-        tifffile.imsave(outDir, np.transpose(data, [dims[2], dims[0], dims[1]]).astype('single') )
+        tifffile.imsave(outDir, np.transpose(data, [dims['t'], dims['x'], dims['y']]).astype('single') )
 
-def updample_timestamps(ts, factor):
+def upsample_timestamps(ts, factor):
     ''' In the event that the data is only ttl every 3rd frame, you can re-upsample to each frame'''
     return np.interp(np.linspace(0, 1, len(ts)*factor), np.linspace(0, 1, len(ts)), ts)
 
-# def compute_pval_map(data, dims = [0,1,2]):
-#     ''' Code to compute the correlation map between a given pixel timeseries and a stimulus'''
-
-
 def resample_xyt(data, oldx, newx, dims = [0,1,2]):
     '''Code will resample every pixel in the data at the newx, given the oldx and the dims of teh array'''
-    data_reshaped = np.transpose(data, [dims[2], dims[0], dims[1]]); # Transpose to y, x, t
+    data_reshaped = np.transpose(data, [dims[2], dims[0], dims[1]]); # Transpose to t, y, x
     sz = data_reshaped.shape
     data_resampled = np.zeros([len(newx), sz[1], sz[2]])
 
@@ -194,8 +189,49 @@ def resample_xyt(data, oldx, newx, dims = [0,1,2]):
 
     return data_resampled
 
+from scipy.ndimage import gaussian_filter
+from scipy.ndimage.filters import gaussian_filter1d
+
+def gaussian_filter_xyt(data, sigmas = [0,1,1]):
+    ''' Gaussian filter in x, y, and t
+    Note: data.shape should be in t, y, x'''
+    sz = data.shape
+    gauss_out = np.zeros_like(data)
+    # Filter in x and y
+    for tt in range(sz[0]):
+        gauss_out[tt, :, :] = gaussian_filter(data[tt, :, :], sigmas[1:], truncate = 2)
+    
+    # Filter in t if necessary
+    if sigmas[0] != 0: # Just perform xy gaussian smoothing
+        for yy in range(sz[1]):
+            for xx in range(sz[2]):
+                gauss_out[:, yy, xx] = gaussian_filter1d(data[:, yy, xx], sigma = sigmas[0], truncate = 2)
+
+    return gauss_out
+
+from sklearn.decomposition import FastICA
+
+def perform_ica(data, num_comps = 5):
+    '''Performs ica on data input that is of the for (t,y,x)'''
+    ica = FastICA(n_components=num_comps)
+    sz = data.shape
+    data_re = data.reshape([sz[0], sz[1]*sz[2]])
+    # Make it zero mean and common std
+    for ii in range(sz[1]*sz[2]):
+        data_re[:, ii] = (data_re[:, ii] - np.mean(data_re[:, ii]))/np.std(data_re[:,ii])
+    # Now perform ica
+    print('fitting model...')
+    ica.fit(data_re)
+    print('done')
+    comps_out = ica.components_.reshape([num_comps, sz[1], sz[2]])
+
+    return comps_out
+
 def compute_fft(data , dims = [0,1,2], doPlot = False):
-    ''' Compute the fourier transform and plots the first 100 power and phase maps'''
+    ''' Compute the fourier transform and plots the first 100 power and phase maps
+    
+    dims = [x_idx, y_idx, t_idx]; Usually [1,2,0] as it is time-leading from david
+    '''
     reshaped = np.transpose(data, [dims[2], dims[0], dims[1]]); # Transpose to t, y, x
     out = np.fft.fft(reshaped, axis = 0); # take along time
     
@@ -265,8 +301,6 @@ def compute_field_sign(ph_az, ph_ev, pw_az, pw_ev, filt_size = 1):
 
     return field_sign
 
-
-
 def parse_timestamps(signal, timestamps, thresh = 2.5, interval_between_experiments = 2, min_isi = 0.01, min_number_exp = 20):
     ''' Takes as input a signal and a given timestamp array and will return a list of parsed experiments
     with timestamsp corresponding to each experiment, interval_between sets the interval in between
@@ -299,4 +333,24 @@ def parse_timestamps(signal, timestamps, thresh = 2.5, interval_between_experime
 	
     return out_list, times
 
-
+def remove_movement_artifact_from_raw_and_condition(data):
+    ''' fUS helper function used to threshold out and interpolate the raw data to remove movement artifacts'''
+    # Removes the movement artifact from the data that comes in the form of nT, nX, nY
+    sub_data = data_raw[:, :4, :].mean(axis = -1).mean(axis=-1)
+    # Exclude all Values greater than 3sd over the median
+    pseudo_z = (sub_data - np.median(sub_data))/np.median(sub_data)
+    idx_remove = np.argwhere(pseudo_z>2)
+    n_timepoints = data.shape[0]
+    # Just do a linear interpolation beyween the last two valid points
+    data_fix = np.copy(data)
+    for xx in idx_remove:
+        if xx == 0 or xx == n_timepoints:
+            data_fix[xx, :, :] = np.median(data_fix, axis = 0)
+        try:
+            prev_i = np.max(np.setdiff1d(np.arange(xx),idx_remove)) # Largest value less than the current number but not in list
+            post_i = np.min(np.setdiff1d(np.arange(xx+1, n_timepoints),idx_remove)) # Minimum value less than the current number but not in list
+            data_fix[xx, :, :] = ( data_fix[prev_i, :, :] + data_fix[post_i, :, :] )/ 2.
+        except: # ANything goes wrong and just set to median
+            data_fix[xx, :, :] = np.median(data_fix, axis = 0)
+    
+    return data_fix
