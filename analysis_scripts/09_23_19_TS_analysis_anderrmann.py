@@ -66,7 +66,7 @@ for ii in range(15):
     data_raw = m.data['Dop'].copy(); # Take the square root...
 
     # Artifact removed version of data
-    data_fix = scfilters.remove_movement_artifact_from_raw_and_condition(data_raw)
+    data_fix = scfilters.remove_movement_artifact_from_raw_and_condition(data_raw, thresh =1.5)
 
     # # # Load timeline only on the first experiment
     if ii in [0]:
@@ -117,7 +117,7 @@ for ii in range(15):
 
     all_exp_dicts.append(curr_dict)
 
-np.save(exportDir + 'data_processed_fullfield.npy', all_exp_dicts)
+#np.save(exportDir + 'data_processed_fullfield.npy', all_exp_dicts)
 
 
 #%%
@@ -180,6 +180,24 @@ combined = trial_average
 if do_save:
     np.save(exportDir + 'combined_single_trial.npy', combined)
     scio.export_tiffs(combined, exportDir + 'TRIAL_averages_all.tiff', dims = {'x':2, 'y':1, 't':0})
+
+
+
+#%%
+
+# Compute activation maps from the data at various deltaX e.g. temporal hemodynamic offsets
+for x in range(1, 20, 2):
+    tmp = trials_dff[30-x:-x, :, :]
+    tmp_re = tmp.reshape([10, 20, nHigh*nY, nWide*nX]).mean(axis=0)
+
+    m1  = tmp_re[:10, :, :].mean(axis = 0)
+    m2  = tmp_re[10:, :, :].mean(axis = 0)
+    dm  = m1-m2; m_val = np.percentile(np.abs(dm), 95)
+    plt.figure(figsize = [10, 3])
+
+    plt.imshow(dm, cmap = 'PRGn', vmin = -m_val, vmax = m_val)
+    plt.suptitle('offset %d' % x)
+
 
 
 

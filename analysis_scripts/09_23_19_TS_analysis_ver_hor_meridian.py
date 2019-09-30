@@ -66,7 +66,7 @@ for ii in range(15):
     data_raw = m.data['Dop'].copy(); # Take the square root...
 
     # Artifact removed version of data
-    data_fix = scfilters.remove_movement_artifact_from_raw_and_condition(data_raw, thresh = 2)
+    data_fix = scfilters.remove_movement_artifact_from_raw_and_condition(data_raw, thresh = 1)
 
     # # # Load timeline only on the first experiment
     if ii in [0]:
@@ -184,18 +184,62 @@ if do_save:
 #%%
 
 # Compute activation maps from the data at various deltaX e.g. temporal hemodynamic offsets
-for x in range(1, 20, 2):
-    tmp = trials_dff[30-x:-x, :, :]
-    tmp_re = tmp.reshape([10, 20, nHigh*nY, nWide*nX]).mean(axis=0)
-
-    m1  = tmp_re[:10, :, :].mean(axis = 0)
-    m2  = tmp_re[10:, :, :].mean(axis = 0)
-    dm  = m1-m2; m_val = np.percentile(np.abs(dm), 90)
-    plt.figure(figsize = [10, 3])
-
-    plt.imshow(dm, cmap = 'bwr', vmin = -m_val, vmax = m_val)
-    plt.suptitle('offset %d' % x)
+#for x in range(1, 20, 5):
 
 
+x = 6
+tmp = trials_dff[30-x:-x, :, :]
+tmp_re = tmp.reshape([10, 20, nHigh*nY, nWide*nX]).mean(axis=0)
+
+m1  = tmp_re[:10, :, :].mean(axis = 0)
+m2  = tmp_re[10:, :, :].mean(axis = 0)
+dm  = m1-m2; m_val = np.percentile(np.abs(dm), 99)
+plt.figure(figsize = [10, 3])
+
+plt.imshow(dm, cmap = 'bwr', vmin = -m_val, vmax = m_val)
+plt.suptitle('offset %d' % x)
+
+#plt.imshow(dm[:52, 128*4:128*5], cmap = 'PRGn', vmin = -m_val, vmax = m_val)
+
+#%%
+
+tcs = np.zeros([15, 4, 230])
+# y0, y1, x0, x1 / one for each region
+masks = [(10, 20, 5, 15), (8, 18, 25, 35), (10, 20, 70, 80), (15, 25, 85, 95)]
+cnt = -1
+for ii in range(3):
+    for jj in range(5):
+        cnt+=1
+        for m_no, (y0, y1, x0, x1) in enumerate(masks):
+            tcs[cnt, m_no, :] = trials_dff[:, 52*ii+y0:52*ii+y1, 128*jj+x0:128*jj+x1].mean(-1).mean(-1)
+
+
+import seaborn as sns
+
+sns.set_style('whitegrid')
+plt.figure(figsize=[5, 10])
+for i in range(15):
+    plt.subplot(15, 1, i+1)
+    plt.plot(tcs[i, 0, :], color = 'b')
+    plt.plot(tcs[i, 1, :], color = 'r')
+
+plt.figure(figsize=[5, 10])
+for i in range(15):
+    plt.subplot(15, 1, i+1)
+    plt.plot(tcs[i, 2, :], color = 'r')
+    plt.plot(tcs[i, 3, :], color = 'b')
+
+
+#%%
+from matplotlib.patches import Rectangle
+plt.figure(figsize = [10, 3])
+
+plt.imshow(dm, cmap = 'bwr', vmin = -m_val, vmax = m_val)
+
+for ii in range(3):
+    for jj in range(5):
+        for m_no, (y0, y1, x0, x1) in enumerate(masks):
+            curr_rect = Rectangle((128*jj+x0, 52*ii+y0), 10, 10, fill = None, color = [0, 0, 0])
+            plt.gca().add_patch(curr_rect)
 
 #%%

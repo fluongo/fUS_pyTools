@@ -190,59 +190,98 @@ if do_save:
 #for x in range(1, 20, 5):
 
 
-x = 6
-tmp = trials_dff[30-x:-x, :, :]
-tmp_re = tmp.reshape([10, 20, nHigh*nY, nWide*nX]).mean(axis=0)
+tmp = trials_dff[40:, :, :]
+tmp_re = tmp.reshape([10, 40, nHigh*nY, nWide*nX]).mean(axis=0)
 
-m1  = tmp_re[:10, :, :].mean(axis = 0)
-m2  = tmp_re[10:, :, :].mean(axis = 0)
+m1  = tmp_re[10:20, :, :].mean(axis = 0)
+m2  = tmp_re[30:, :, :].mean(axis = 0)
 dm  = m1-m2; m_val = np.percentile(np.abs(dm), 99)
 plt.figure(figsize = [10, 3])
 
-plt.imshow(dm, cmap = 'bwr', vmin = -m_val, vmax = m_val)
-plt.suptitle('offset %d' % x)
+plt.imshow(gaussian_filter(dm, 2), cmap = 'PRGn', vmin = -m_val, vmax = m_val)
+plt.suptitle('OBJECTS-SCRAMBLED E.G. Purple is object-prefer')
+
+#%% Do a bunch of t-tests
+
+from scipy import stats
+
+tmp = trials_dff[40:, :, :]
+tmp_re = tmp.reshape([10, 40, nHigh*nY, nWide*nX])
+
+p_vals = np.zeros([nHigh*nY, nWide*nX])
+t_vals = np.zeros([nHigh*nY, nWide*nX])
+
+for ii in range(nHigh*nY):
+    if ii % 50 == 0:
+        print('On iteration %d out of %d' % (ii, nHigh*nY))
+    for jj in range(nWide*nX):
+        [t_tmp, p_tmp] = stats.ttest_ind(tmp_re[:, 15:20, ii, jj].mean(axis=1), tmp_re[:, 35:, ii, jj].mean(axis=1))
+        p_vals[ii, jj] = p_tmp
+        t_vals[ii, jj] = t_tmp
+        
+
+
+
+p_sign = t_vals.copy()
+p_sign[p_sign>0] =1
+p_sign[p_sign<0] =-1
+
+#plt.imshow(np.log(p_vals)); plt.colorbar()
+# With sign 
+p_thresh=0.05
+p_vals[p_vals>p_thresh] = 1
+
+plt.figure(figsize = [10, 2])
+plt.imshow(p_sign*np.log10(p_vals), cmap = 'bwr', vmin = -5, vmax = 5); plt.colorbar()
+plt.suptitle('Log p _value with sign ')
+
+
 
 #plt.imshow(dm[:52, 128*4:128*5], cmap = 'PRGn', vmin = -m_val, vmax = m_val)
 
+# tcs = np.zeros([15, 4, 440])
+# # y0, y1, x0, x1 / one for each region
+# masks = [(10, 20, 5, 15), (8, 18, 25, 35), (10, 20, 70, 80), (15, 25, 85, 95)]
+# cnt = -1
+# for ii in range(3):
+#     for jj in range(5):
+#         cnt+=1
+#         for m_no, (y0, y1, x0, x1) in enumerate(masks):
+#             tcs[cnt, m_no, :] = trials_dff[:, 52*ii+y0:52*ii+y1, 128*jj+x0:128*jj+x1].mean(-1).mean(-1)
+
+
+# import seaborn as sns
+
+# sns.set_style('whitegrid')
+# plt.figure(figsize=[5, 10])
+# for i in range(15):
+#     plt.subplot(15, 1, i+1)
+#     plt.plot(tcs[i, 0, :], color = 'b')
+#     plt.plot(tcs[i, 1, :], color = 'r')
+
+# plt.figure(figsize=[5, 10])
+# for i in range(15):
+#     plt.subplot(15, 1, i+1)
+#     plt.plot(tcs[i, 2, :], color = 'r')
+#     plt.plot(tcs[i, 3, :], color = 'b')
+
+
+# #%%
+# from matplotlib.patches import Rectangle
+# plt.figure(figsize = [10, 3])
+
+# plt.imshow(dm, cmap = 'bwr', vmin = -m_val, vmax = m_val)
+
+# for ii in range(3):
+#     for jj in range(5):
+#         for m_no, (y0, y1, x0, x1) in enumerate(masks):
+#             curr_rect = Rectangle((128*jj+x0, 52*ii+y0), 10, 10, fill = None, color = [0, 0, 0])
+#             plt.gca().add_patch(curr_rect)
+
+# #%%
+
+
 #%%
 
-tcs = np.zeros([15, 4, 230])
-# y0, y1, x0, x1 / one for each region
-masks = [(10, 20, 5, 15), (8, 18, 25, 35), (10, 20, 70, 80), (15, 25, 85, 95)]
-cnt = -1
-for ii in range(3):
-    for jj in range(5):
-        cnt+=1
-        for m_no, (y0, y1, x0, x1) in enumerate(masks):
-            tcs[cnt, m_no, :] = trials_dff[:, 52*ii+y0:52*ii+y1, 128*jj+x0:128*jj+x1].mean(-1).mean(-1)
-
-
-import seaborn as sns
-
-sns.set_style('whitegrid')
-plt.figure(figsize=[5, 10])
-for i in range(15):
-    plt.subplot(15, 1, i+1)
-    plt.plot(tcs[i, 0, :], color = 'b')
-    plt.plot(tcs[i, 1, :], color = 'r')
-
-plt.figure(figsize=[5, 10])
-for i in range(15):
-    plt.subplot(15, 1, i+1)
-    plt.plot(tcs[i, 2, :], color = 'r')
-    plt.plot(tcs[i, 3, :], color = 'b')
-
-
-#%%
-from matplotlib.patches import Rectangle
-plt.figure(figsize = [10, 3])
-
-plt.imshow(dm, cmap = 'bwr', vmin = -m_val, vmax = m_val)
-
-for ii in range(3):
-    for jj in range(5):
-        for m_no, (y0, y1, x0, x1) in enumerate(masks):
-            curr_rect = Rectangle((128*jj+x0, 52*ii+y0), 10, 10, fill = None, color = [0, 0, 0])
-            plt.gca().add_patch(curr_rect)
 
 #%%
