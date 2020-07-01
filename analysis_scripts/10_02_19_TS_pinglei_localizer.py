@@ -36,9 +36,9 @@ from PIL import Image
 ##################################################################
 # Load the fUS data
 ##################################################################
-data_dir = '/data/fUS_project/data/data_sep25'
-fns = sorted(glob.glob(data_dir + '/RT*.mat')); # NOW DO THE LAST 15
-timelines = len(fns)*[data_dir + '/timeline_09-25-2019_11-44.mat']
+data_dir = '/data/fUS_project/data/data_Oct02/'
+fns = sorted(glob.glob(data_dir + '/RT*.mat'))[:9]; # Only first 9
+timelines = len(fns)*[data_dir + '/timeline_10-02-2019_11-24.mat']
 n_fus = range(len(fns))
 n_stim = range(len(fns))
 
@@ -47,15 +47,15 @@ all_exps = [[i, j,k, l, m] for i,j,k ,l, m in zip(fns, timelines, range(len(fns)
 n_trials = 10;
 fus_rate =  2; # THIS EXPEIMENT WAS 2 HZ
 
-
+n_exp = len(fns)
 #%%
 all_exp_dicts = []
 
 # Export tiffs of all experiments
-for ii in range(15):
+for ii in range(n_exp):
     animal_fn, timeline_fn, exp_number, exp_number_fus, exp_number_stim = all_exps[ii]
     outDir, sub_fn = os.path.split(animal_fn)
-    exportDir = outDir + '/extras_obj_scram/'
+    exportDir = outDir + '/extras_pinglei_obj_NEWEST_fbInterview/'
 
     if not os.path.exists(exportDir):
         os.mkdir(exportDir)
@@ -87,8 +87,9 @@ for ii in range(15):
     
     # # Compute the parsed version of the timestamps
     playbackHz = 1/np.mean(np.diff(stim_ts)); # Estimate the playback speed
-    newx = stim_ts; # Interpolate the value at roughly the rate of the imaging, eg 500 ms so about 12 frames for 25 hz.....
-    
+    newx=stim_ts
+    #newx = stim_ts[1:-1: int(30/fus_rate)]; # Interpolate the value at roughly the rate of the imaging, eg 500 ms so about 12 frames for 25 hz.....
+ 
     # Now do resample from the artifact cleaned version
     data_resample_at_stim = scana.resample_xyt(data_fix, fus_ts, newx, dims = {'x':1, 'y':2, 't':0})
     
@@ -120,18 +121,19 @@ for ii in range(15):
 
     all_exp_dicts.append(curr_dict)
 
-np.save(exportDir + 'data_processed_obj_scram.npy', all_exp_dicts)
+np.save(exportDir + 'data_processed_pinglei_obj.npy', all_exp_dicts)
 
 
 #%%
-
 # # Export the cumulative tiff for trial averaged
-stim_name = 'OBJ_SCRAM'
+#all_exp_dicts = np.load(exportDir + 'data_processed_pinglei_obj.npy')[()]
+
+stim_name = 'PINGLEI_OBJ_fbInterview'
 [nT, nY, nX] = all_exp_dicts[0]['data_resample_at_stim'].shape
 do_save = True
 
 # Size of the output of planes
-nWide = 5;
+nWide = 3;
 nHigh = 3;
 
 
@@ -143,7 +145,7 @@ all_trials_raw_medfilt = np.zeros([n_fus_frames, nHigh*nY, nWide*nX])
 nF_stim = nT
 all_trials_resampled_at_stim = np.zeros([nF_stim, nHigh*nY, nWide*nX])
 
-for i in range(15):
+for i in range(n_exp):
     a, b = np.unravel_index(i, [nHigh, nWide])
     exp_dict = all_exp_dicts[i]
 
@@ -155,9 +157,9 @@ for i in range(15):
 # Export raw
 if do_save:
     scio.export_tiffs(all_trials_resampled_at_stim, exportDir + stim_name + '_cumulative_trials_resample_stim.tiff', dims = {'x':2, 'y':1, 't':0})
-    scio.export_tiffs(all_trials_raw, exportDir + '_cumulative_trials_RAW.tiff', dims = {'x':2, 'y':1, 't':0})
-    scio.export_tiffs(all_trials_raw_fix, exportDir + stim_name + '_cumulative_trials_RAW_linear_interp_of_artifacts.tiff', dims = {'x':2, 'y':1, 't':0})
-    scio.export_tiffs(all_trials_raw_medfilt, exportDir + stim_name + '_cumulative_trials_RAW_medfilt_5_5_5.tiff', dims = {'x':2, 'y':1, 't':0})
+    scio.export_tiffs(all_trials_raw, exportDir + stim_name + '_RAW.tiff', dims = {'x':2, 'y':1, 't':0})
+    scio.export_tiffs(all_trials_raw_fix, exportDir + stim_name + '_RAW_linear_interp_of_artifacts.tiff', dims = {'x':2, 'y':1, 't':0})
+    scio.export_tiffs(all_trials_raw_medfilt, exportDir + stim_name + '_RAW_medfilt_5_5_5.tiff', dims = {'x':2, 'y':1, 't':0})
 
 # # Make a DFF from median filter
 all_trials_medfilt_dff  = all_trials_raw_medfilt.copy()
@@ -177,8 +179,8 @@ trials_dff              = (trials_dff - f0)/f0
 if do_save:
     scio.export_tiffs(trials_dff, exportDir + stim_name + '_trial_synchronized_toDFF.tiff', dims = {'x':2, 'y':1, 't':0})
 
-trials_tmp = trials_dff[40:, :, :]# Chop off 30 sec gray
-trial_average = trials_tmp.reshape([10, 40, nHigh*nY, nWide*nX]).mean(axis=0)
+trials_tmp = trials_dff[30:, :, :]# Chop off 15 sec static
+trial_average = trials_tmp.reshape([10, 80, nHigh*nY, nWide*nX]).mean(axis=0)
 combined = trial_average
 
 if do_save:
@@ -190,23 +192,148 @@ if do_save:
 # Compute activation maps from the data at various deltaX e.g. temporal hemodynamic offsets
 #for x in range(1, 20, 5):
 
+tmp = trials_dff[30:, :, :]
+tmp_re = tmp.reshape([10, 80, nHigh*nY, nWide*nX]).mean(axis=0)
 
-tmp = trials_dff[40:, :, :]
-tmp_re = tmp.reshape([10, 40, nHigh*nY, nWide*nX]).mean(axis=0)
-
-m1  = tmp_re[10:20, :, :].mean(axis = 0)
-m2  = tmp_re[30:, :, :].mean(axis = 0)
+m1  = tmp_re[:10, :, :].mean(axis = 0)
+m2  = tmp_re[10:, :, :].mean(axis = 0)
 dm  = m1-m2; m_val = np.percentile(np.abs(dm), 99)
 plt.figure(figsize = [10, 3])
 
-plt.imshow(gaussian_filter(dm, 2), cmap = 'PRGn', vmin = -m_val, vmax = m_val)
-plt.suptitle('OBJECTS-SCRAMBLED E.G. Purple is object-prefer')
+plt.imshow(dm, cmap = 'bwr', vmin = -m_val, vmax = m_val)
+#plt.suptitle('offset %d' % x)
 
-#%% Do a bunch of t-tests
+#plt.imshow(dm[:52, 128*4:128*5], cmap = 'PRGn', vmin = -m_val, vmax = m_val)
+#%% P VALUES
+import scipy.stats as stats
+
+# PLOT FOR DORIS
+# Compute all 4C2 P value maps on the single pixel level
+# 
+# ORDER OF STIMULUS IS 
+# STUBBY, FACES, BODIES, SKINNY
+
+# 10Bl / 10 stubby / 10bl / 10faces / 10Bl / 10 bodies / 10bl / 10 faces
+
+
+# Make a map of a single value representing the mean of each of the 3 conditions
+def compute_trial_response(trials_dff, intervals):
+    # Returns a tenbsor of nTrialsxnHxnWxlen(intervals) for each trial type
+    out = np.zeros([10, trials_dff.shape[-2],trials_dff.shape[-1], len(intervals)])
+    for i, (x,y) in enumerate(intervals):
+        # print(trials_dff.shape)
+        # print(trials_dff[:, x:y, :, :].mean(1).shape)
+        out[:, :, :, i] = trials_dff[:, x:y, :, :].mean(1)
+
+    return out
+
+
+trials_dff_sub = trials_dff[30:, :, :].reshape([10, 80, nHigh*nY, nWide*nX])
+plt.plot(trials_dff_sub[:, :, 65, 160].mean(axis = 0))
+intervals = [(15, 20), (35, 40), (55, 60), (75, 80)]
+out = compute_trial_response(trials_dff_sub, intervals)
+
+p_vals = np.zeros([out.shape[1], out.shape[2], 4])
+t_vals = np.zeros([out.shape[1], out.shape[2], 4])
+
+# Now compute one vs all P values for each one:
+for condi in range(4):
+    print(condi)
+    # Seperate into one vs all and compute a p val map on that
+    for i in range(out.shape[1]):
+        for j in range(out.shape[2]):
+            allidx = list(range(4)); allidx.remove(condi)
+            onev = out[:, i, j, condi]
+            allv = out[:, i, j, allidx].ravel()
+            [t_vals[i,j,condi], p_vals[i,j,condi]] = stats.ttest_ind(onev, allv)
+
+#%%
+p_sign = t_vals.copy()
+p_sign[p_sign>0] =1
+p_sign[p_sign<0] =-1
+
+plt.figure(figsize = [13, 4])
+plt.suptitle('STIM PREFERRING')
+for i,s in zip(range(4), ['stubby', 'faces', 'bodies', 'long']):
+    plt.subplot(2,2,i+1)
+    plt.imshow(p_sign[:, :, i]*np.log10(p_vals[:, :, i]), cmap = 'PuRd_r', vmin = -2, vmax = -1.3); 
+    plt.title(s); plt.colorbar()
+    #plt.grid()
+
+plt.figure(figsize = [13, 4])
+plt.suptitle('OTHER PREFERRING')
+for i,s in zip(range(4), ['stubby', 'faces', 'bodies', 'long']):
+    plt.subplot(2,2,i+1)
+    plt.imshow(p_sign[:, :, i]*np.log10(p_vals[:, :, i]), cmap = 'PuBu', vmin = 1.3, vmax = 2); 
+    plt.title(s); plt.colorbar()
+    #plt.grid()
+
+plt.figure(figsize = [13, 4])
+plt.suptitle('STIM PREFERERING WITH ANATOMY')
+for i,s in zip(range(4), ['stubby', 'faces', 'bodies', 'long']):
+    plt.subplot(2,2,i+1)
+    plt.imshow(all_trials_raw.mean(0), cmap = 'binary', vmax = 3e10)
+
+    # Do masking
+    plot_p = p_sign[:, :, i]*np.log10(p_vals[:, :, i])
+    Zm = np.ma.masked_where(plot_p > -1.3, plot_p)
+    plt.imshow(Zm, cmap = 'Reds_r', vmin = -5, vmax = -1.3); plt.colorbar()
+    plt.title(s)
+
+plt.savefig(os.path.join(exportDir, 'anatomy_with_pvals.pdf'))
+plt.savefig('/data/git_repositories_py/fUS_pytools/analysis_scripts/ppt_pvals_anatomy.pdf')
+
+#%% Plot the mean timecourse with overlaid stim times
+import seaborn as sns
+import matplotlib.patches as patches
+
+x_s = 190
+x_e = 200
+y_s = 60
+y_e = 70
+plt.figure(figsize=[20, 2])
+tc = all_trials_resampled_at_stim[30:, y_s:y_e, x_s:x_e].mean(-1).mean(-1)
+tc = (tc - np.min(tc))/np.min(tc)
+plt.plot(tc); sns.despine()
+
+# Create a Rectangle patch
+start = 10
+for trials in range(10):
+    for color in ['r', 'g', 'b', 'k']:
+        rect = patches.Rectangle((start,0.5),10,0.05,linewidth=1,edgecolor=color,facecolor=color)
+        # Add the patch to the Axes
+        plt.gca().add_patch(rect)
+        start+=20
+plt.xlabel('Frame number (2Hz)')
+plt.ylabel('% change')
+
+plt.figure(figsize = [10, 4])
+plt.subplot(1,2,1)
+sns.tsplot(tc.reshape(10, 80), time = np.linspace(0, 40, 80))
+
+plt.title('WIth sem')
+sns.despine()
+
+plt.subplot(1,2,2)
+plt.plot(tc.reshape(10, 80).T, color = 'k', alpha=0.1)
+plt.plot(tc.reshape(10, 80).mean(axis = 0), color = 'k')
+start = 10
+for color in ['r', 'g', 'b', 'k']:
+    rect = patches.Rectangle((start,0.1),10,0.05,linewidth=1,edgecolor=color,facecolor=color)
+    # Add the patch to the Axes
+    plt.gca().add_patch(rect); start+=20    
+sns.despine()
+
+#%% P VALUES
+# PLOT FOR DORIS
+# Compute all 4C2 P value maps on the single pixel level
+# 
+# ORDER OF STIMULUS IS 
+# STUBBY, FACES, BODIES, SKINNY
 
 from scipy import stats
 
-tmp = trials_dff[40:, :, :]
+tmp = trials_dff[30:, :, :]
 tmp_re = tmp.reshape([10, 40, nHigh*nY, nWide*nX])
 
 p_vals = np.zeros([nHigh*nY, nWide*nX])
@@ -219,7 +346,7 @@ for ii in range(nHigh*nY):
         [t_tmp, p_tmp] = stats.ttest_ind(tmp_re[:, 15:20, ii, jj].mean(axis=1), tmp_re[:, 35:, ii, jj].mean(axis=1))
         p_vals[ii, jj] = p_tmp
         t_vals[ii, jj] = t_tmp
-
+        
 p_sign = t_vals.copy()
 p_sign[p_sign>0] =1
 p_sign[p_sign<0] =-1
@@ -227,98 +354,15 @@ p_sign[p_sign<0] =-1
 #plt.imshow(np.log(p_vals)); plt.colorbar()
 # With sign 
 p_thresh=0.05
-#p_vals[p_vals>p_thresh] = 1
+p_vals[p_vals>p_thresh] = 1
 
-plt.figure(figsize = [18, 4])
-plt.imshow(p_sign*np.log10(p_vals), cmap = 'bwr', vmin = -3, vmax = 3); plt.colorbar()
+plt.figure(figsize = [10, 2])
+plt.imshow(p_sign*np.log10(p_vals), cmap = 'bwr', vmin = -2, vmax = 2); plt.colorbar()
 plt.suptitle('Log p _value with sign ')
-plt.savefig('/data/fUS_project/visualization/sfn2019_pvals.pdf'); plt.axis('off')
-
-plt.figure(figsize = [18, 4])
-vasculature_image = all_trials_raw.mean(axis = 0)
-plt.imshow(vasculature_image, vmax = 3e10, cmap = 'binary_r'); plt.colorbar()
-plt.savefig('/data/fUS_project/visualization/sfn2019_vasc.pdf'); plt.axis('off')
-
-# Masked version
-plt.figure(figsize = [18, 4])
-mask = np.ma.masked_where(p_vals>0.05, p_sign*np.log10(p_vals))
-#p_vals_mask = np.ma.masked_array(p_vals,mask)
-plt.imshow(vasculature_image, vmax = 3e10, cmap = 'binary_r', aspect = 'equal'); 
-plt.imshow(mask, cmap = 'bwr', vmin =-3, vmax = 3, alpha = 1, aspect = 'equal'); plt.colorbar()
-plt.savefig('/data/fUS_project/visualization/sfn2019_overlay.pdf'); plt.axis('off')
 
 
-#plt.imshow(dm[:52, 128*4:128*5], cmap = 'PRGn', vmin = -m_val, vmax = m_val)
 
-#%%
-
-
-tcs = np.zeros([15, 2, 440])
-# y0, y1, x0, x1 / one for each region
-#masks = [(13, 23, 2, 12), (8, 18, 25, 35), (10, 20, 70, 80), (15, 25, 85, 95)]
-masks = [(13, 23, 2, 12), (8, 18, 25, 35)]
-
-cnt = -1
-for ii in range(3):
-    for jj in range(5):
-        cnt+=1
-        for m_no, (y0, y1, x0, x1) in enumerate(masks):
-            tcs[cnt, m_no, :] = trials_dff[:, 52*ii+y0:52*ii+y1, 128*jj+x0:128*jj+x1].mean(-1).mean(-1)
+## %%
 
 
-# import seaborn as sns
-
-# sns.set_style('whitegrid')
-# plt.figure(figsize=[5, 10])
-# for i in range(15):
-#     plt.subplot(15, 1, i+1)
-#     plt.plot(tcs[i, 0, :], color = 'b')
-#     plt.plot(tcs[i, 1, :], color = 'r')
-
-# plt.figure(figsize=[5, 10])
-# for i in range(15):
-#     plt.subplot(15, 1, i+1)
-#     plt.plot(tcs[i, 2, :], color = 'r')
-#     plt.plot(tcs[i, 3, :], color = 'b')
-
-
-# #%%
-
-from matplotlib.patches import Rectangle
-plt.figure(figsize = [10, 3])
-
-plt.imshow(dm, cmap = 'bwr', vmin = -m_val, vmax = m_val)
-
-for ii in range(3):
-    for jj in range(5):
-        for m_no, (y0, y1, x0, x1) in enumerate(masks):
-            curr_rect = Rectangle((128*jj+x0, 52*ii+y0), 10, 10, fill = None, color = [0, 0, 0])
-            plt.gca().add_patch(curr_rect)
-
-#%%
-tmp = tcs[:, :, 50:-30].reshape([15, 2, 9, 40])
-or_color = '#FF6600'
-
-plt.figure(figsize = [10, 5])
-for slice_n in range(3):
-    plt.subplot(2,3,slice_n+1)
-    sns.tsplot(tmp[slice_n, 0, :, :]+0.2, color = 'k')
-    sns.tsplot(tmp[slice_n, 1, :, :]+0.2, color = or_color)
-    plt.title('slice_numebr %d' % slice_n)
-    plt.ylim([-0.1, 0.8])
-
-for cnt, slice_n in enumerate(range(9, 12)):
-    plt.subplot(2,3,4+cnt)
-    #sns.tsplot(tmp[slice_n, 2, :, :]+0.2, color = 'r')
-    sns.tsplot(tmp[slice_n, 1, :, :]+0.2, color = or_color)
-    sns.tsplot(tmp[slice_n, 0, :, :]+0.2, color = 'k')
-    
-    plt.title('slice_numebr %d' % slice_n)
-    plt.ylim([-0.1, 0.8])
-
-#plt.savefig('/data/fUS_project/visualization/sfn2019_timecourse_for_frank_shifted.pdf');
-
-#%%
-
-
-#%%
+# %%

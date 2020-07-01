@@ -36,9 +36,9 @@ from PIL import Image
 ##################################################################
 # Load the fUS data
 ##################################################################
-data_dir = '/data/fUS_project/data/data_sep25'
+data_dir = '/data/fUS_project/data/data_dec11'
 fns = sorted(glob.glob(data_dir + '/RT*.mat')); # NOW DO THE LAST 15
-timelines = len(fns)*[data_dir + '/timeline_09-25-2019_11-44.mat']
+timelines = len(fns)*[data_dir + '/timeline_12-11-2019_10-26.mat']
 n_fus = range(len(fns))
 n_stim = range(len(fns))
 
@@ -73,7 +73,7 @@ for ii in range(15):
         timestamps_m = scio.matloader();
         timestamps_m.loadmat_h5(timeline_fn); #timestamps_m.summary()
         ts = timestamps_m.data['timestamps'].copy()
-        stim_list, times = scana.parse_timestamps(timestamps_m.data['data'][:,1], ts, min_isi = 0, interval_between_experiments = 4,  min_number_exp = 100); # Separate the frames for each one...
+        stim_list, times = scana.parse_timestamps(timestamps_m.data['data'][:,1], ts, min_isi = 0, interval_between_experiments = 1,  min_number_exp = 100); # Separate the frames for each one...
         fus_list, times = scana.parse_timestamps(timestamps_m.data['data'][:,0], ts, min_isi = 0.2, interval_between_experiments = 10,  min_number_exp = 100); # Separate the frames for each one...
         for tmp_ss, tmp_ff in zip(stim_list, fus_list):
             print('Number of frames stim: %d // fus: %d' % (len(tmp_ss), len(tmp_ff)))

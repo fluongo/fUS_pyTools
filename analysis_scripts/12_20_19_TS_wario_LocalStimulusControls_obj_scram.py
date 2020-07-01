@@ -36,9 +36,10 @@ from PIL import Image
 ##################################################################
 # Load the fUS data
 ##################################################################
-data_dir = '/data/fUS_project/data/data_sep25'
+data_dir = '/data/fUS_project/data/data_dec20'
 fns = sorted(glob.glob(data_dir + '/RT*.mat')); # NOW DO THE LAST 15
-timelines = len(fns)*[data_dir + '/timeline_09-25-2019_11-44.mat']
+timelines = len(fns)*[data_dir + '/timeline_12-20-2019_12-09.mat']
+
 n_fus = range(len(fns))
 n_stim = range(len(fns))
 
@@ -52,10 +53,10 @@ fus_rate =  2; # THIS EXPEIMENT WAS 2 HZ
 all_exp_dicts = []
 
 # Export tiffs of all experiments
-for ii in range(15):
+for ii in range(len(fns)):
     animal_fn, timeline_fn, exp_number, exp_number_fus, exp_number_stim = all_exps[ii]
     outDir, sub_fn = os.path.split(animal_fn)
-    exportDir = outDir + '/extras_obj_scram/'
+    exportDir = outDir + '/extras_obj_scram_LOCAL_CONTROLS_smallergrid/'
 
     if not os.path.exists(exportDir):
         os.mkdir(exportDir)
@@ -73,14 +74,27 @@ for ii in range(15):
         timestamps_m = scio.matloader();
         timestamps_m.loadmat_h5(timeline_fn); #timestamps_m.summary()
         ts = timestamps_m.data['timestamps'].copy()
-        stim_list, times = scana.parse_timestamps(timestamps_m.data['data'][:,1], ts, min_isi = 0, interval_between_experiments = 4,  min_number_exp = 100); # Separate the frames for each one...
+        stim_list, times = scana.parse_timestamps(timestamps_m.data['data'][:,1], ts, min_isi = 0, interval_between_experiments = 1,  min_number_exp = 100); # Separate the frames for each one...
         fus_list, times = scana.parse_timestamps(timestamps_m.data['data'][:,0], ts, min_isi = 0.2, interval_between_experiments = 10,  min_number_exp = 100); # Separate the frames for each one...
         for tmp_ss, tmp_ff in zip(stim_list, fus_list):
             print('Number of frames stim: %d // fus: %d' % (len(tmp_ss), len(tmp_ff)))
 
     # Recompute at appropriate times
     stim_ts = stim_list[exp_number_stim];
-    fus_ts = fus_list[exp_number_fus][1:]; # Chop off first
+
+    ########################################################################
+    # CUSTOM FOR DEALING WITH TIMELINE ISSUES
+    #
+    if ii == 0:
+        fus_ts = fus_list[exp_number_fus];
+    elif ii in [1,2,4]:
+        fus_ts = fus_list[exp_number_fus][1:]; # Chop off first
+    elif ii == 3:
+        fus_ts = fus_list[exp_number_fus][2:]; # Chop off Two
+    #
+    # CUSTOM FOR DEALING WITH TIMELINE ISSUES
+    ########################################################################
+    
     if ii == 0: # add one stim frame
         stim_ts = np.append(stim_ts, stim_ts[-1])
     print('stim_ts has %d frames' % len(stim_ts))
@@ -101,17 +115,9 @@ for ii in range(15):
     [nT, nY, nX] = data_resample_at_stim.shape
     trials_all = data_resample_at_stim
 
-    # Compute the fus_stim_time for each frame
-    fus_ts_stim = np.zeros_like(fus_ts)
-    for ww in range(data_raw.shape[0]):
-        fus_ts_stim[ww] = np.argmin(np.abs(stim_ts - fus_ts[ww]));
-    # Turn this into indices of the stimulus, e.g. cut out the first 900
-    fus_ts_stim = np.maximum(fus_ts_stim-900, 0);
-
     curr_dict = {}
     curr_dict['stim_ts'] = stim_ts
     curr_dict['fus_ts'] = fus_ts
-    curr_dict['fus_ts_stim'] = fus_ts_stim
     curr_dict['data_raw'] = data_raw
     curr_dict['data_raw_fix'] = data_fix
     curr_dict['data_raw_medfilt'] = median_filter(data_fix, size = [5,5,5])
@@ -120,20 +126,19 @@ for ii in range(15):
 
     all_exp_dicts.append(curr_dict)
 
-np.save(exportDir + 'data_processed_obj_scram.npy', all_exp_dicts)
+np.save(exportDir + 'data_processed_obj_scram_LOCAL_CONTROLS.npy', all_exp_dicts)
 
 
 #%%
 
 # # Export the cumulative tiff for trial averaged
-stim_name = 'OBJ_SCRAM'
+stim_name = 'OBJ_SCRAM_LOCAL'
 [nT, nY, nX] = all_exp_dicts[0]['data_resample_at_stim'].shape
 do_save = True
 
 # Size of the output of planes
 nWide = 5;
-nHigh = 3;
-
+nHigh = 1;
 
 n_fus_frames = all_exp_dicts[0]['data_raw'].shape[0]
 all_trials_raw = np.zeros([n_fus_frames, nHigh*nY, nWide*nX])
@@ -143,7 +148,7 @@ all_trials_raw_medfilt = np.zeros([n_fus_frames, nHigh*nY, nWide*nX])
 nF_stim = nT
 all_trials_resampled_at_stim = np.zeros([nF_stim, nHigh*nY, nWide*nX])
 
-for i in range(15):
+for i in range(len(fns)):
     a, b = np.unravel_index(i, [nHigh, nWide])
     exp_dict = all_exp_dicts[i]
 
@@ -177,37 +182,40 @@ trials_dff              = (trials_dff - f0)/f0
 if do_save:
     scio.export_tiffs(trials_dff, exportDir + stim_name + '_trial_synchronized_toDFF.tiff', dims = {'x':2, 'y':1, 't':0})
 
-trials_tmp = trials_dff[40:, :, :]# Chop off 30 sec gray
-trial_average = trials_tmp.reshape([10, 40, nHigh*nY, nWide*nX]).mean(axis=0)
+trials_tmp = trials_dff[60:, :, :]# Chop off 30 sec gray
+trial_average = trials_tmp.reshape([10, 160, nHigh*nY, nWide*nX]).mean(axis=0)
 combined = trial_average
 
 if do_save:
     np.save(exportDir + 'combined_single_trial.npy', combined)
     scio.export_tiffs(combined, exportDir + 'TRIAL_averages_all.tiff', dims = {'x':2, 'y':1, 't':0})
 
-#%%
-
 # Compute activation maps from the data at various deltaX e.g. temporal hemodynamic offsets
 #for x in range(1, 20, 5):
 
+# tmp = trials_dff[50:, :, :]
+# tmp_re = tmp.reshape([10, 40, nHigh*nY, nWide*nX]).mean(axis=0)
 
-tmp = trials_dff[40:, :, :]
-tmp_re = tmp.reshape([10, 40, nHigh*nY, nWide*nX]).mean(axis=0)
+# m1  = tmp_re[5:15, :, :].mean(axis = 0)
+# m2  = tmp_re[25:35, :, :].mean(axis = 0)
+# dm  = m1-m2; m_val = np.percentile(np.abs(dm), 99)
+# plt.figure(figsize = [10, 3])
 
-m1  = tmp_re[10:20, :, :].mean(axis = 0)
-m2  = tmp_re[30:, :, :].mean(axis = 0)
-dm  = m1-m2; m_val = np.percentile(np.abs(dm), 99)
-plt.figure(figsize = [10, 3])
-
-plt.imshow(gaussian_filter(dm, 2), cmap = 'PRGn', vmin = -m_val, vmax = m_val)
-plt.suptitle('OBJECTS-SCRAMBLED E.G. Purple is object-prefer')
+# plt.imshow(gaussian_filter(dm, 2), cmap = 'PRGn', vmin = -m_val, vmax = m_val)
+# plt.suptitle('OBJECTS-SCRAMBLED E.G. Purple is object-prefer')
 
 #%% Do a bunch of t-tests
 
 from scipy import stats
 
-tmp = trials_dff[40:, :, :]
-tmp_re = tmp.reshape([10, 40, nHigh*nY, nWide*nX])
+tmp = trials_dff[60:, :, :]
+tmp_re = tmp.reshape([10, 160, nHigh*nY, nWide*nX])
+
+# 1. Objects PS-BG
+# 2. PS-BG
+# 3. Objects Gray
+# 4. Grid Scramble Objects PS-BG
+# P Valuie computes from 1 vs. 4
 
 p_vals = np.zeros([nHigh*nY, nWide*nX])
 t_vals = np.zeros([nHigh*nY, nWide*nX])
@@ -216,7 +224,8 @@ for ii in range(nHigh*nY):
     if ii % 50 == 0:
         print('On iteration %d out of %d' % (ii, nHigh*nY))
     for jj in range(nWide*nX):
-        [t_tmp, p_tmp] = stats.ttest_ind(tmp_re[:, 15:20, ii, jj].mean(axis=1), tmp_re[:, 35:, ii, jj].mean(axis=1))
+        [t_tmp, p_tmp] = stats.ttest_ind(tmp_re[:, 5:25, ii, jj].mean(axis=1), tmp_re[:, 125:145, ii, jj].mean(axis=1))
+        
         p_vals[ii, jj] = p_tmp
         t_vals[ii, jj] = t_tmp
 
@@ -230,95 +239,46 @@ p_thresh=0.05
 #p_vals[p_vals>p_thresh] = 1
 
 plt.figure(figsize = [18, 4])
-plt.imshow(p_sign*np.log10(p_vals), cmap = 'bwr', vmin = -3, vmax = 3); plt.colorbar()
-plt.suptitle('Log p _value with sign ')
-plt.savefig('/data/fUS_project/visualization/sfn2019_pvals.pdf'); plt.axis('off')
-
-plt.figure(figsize = [18, 4])
-vasculature_image = all_trials_raw.mean(axis = 0)
-plt.imshow(vasculature_image, vmax = 3e10, cmap = 'binary_r'); plt.colorbar()
-plt.savefig('/data/fUS_project/visualization/sfn2019_vasc.pdf'); plt.axis('off')
-
-# Masked version
-plt.figure(figsize = [18, 4])
-mask = np.ma.masked_where(p_vals>0.05, p_sign*np.log10(p_vals))
-#p_vals_mask = np.ma.masked_array(p_vals,mask)
-plt.imshow(vasculature_image, vmax = 3e10, cmap = 'binary_r', aspect = 'equal'); 
-plt.imshow(mask, cmap = 'bwr', vmin =-3, vmax = 3, alpha = 1, aspect = 'equal'); plt.colorbar()
-plt.savefig('/data/fUS_project/visualization/sfn2019_overlay.pdf'); plt.axis('off')
-
-
-#plt.imshow(dm[:52, 128*4:128*5], cmap = 'PRGn', vmin = -m_val, vmax = m_val)
+plt.imshow(p_sign*np.log10(p_vals), cmap = 'bwr', vmin = -2, vmax = 2); plt.colorbar()
+plt.suptitle('Log p _value with sign of Object on PS vs. Object on PS grid')
 
 #%%
+from matplotlib.patches import Rectangle
 
-
-tcs = np.zeros([15, 2, 440])
+tcs = np.zeros([5, 4, 1660])
 # y0, y1, x0, x1 / one for each region
 #masks = [(13, 23, 2, 12), (8, 18, 25, 35), (10, 20, 70, 80), (15, 25, 85, 95)]
-masks = [(13, 23, 2, 12), (8, 18, 25, 35)]
+masks = [(7, 22, 32, 47), (9, 24, 47, 62), (11, 26, 62, 77), (13, 28, 77, 92)]
 
 cnt = -1
-for ii in range(3):
+for ii in range(1):
     for jj in range(5):
         cnt+=1
         for m_no, (y0, y1, x0, x1) in enumerate(masks):
             tcs[cnt, m_no, :] = trials_dff[:, 52*ii+y0:52*ii+y1, 128*jj+x0:128*jj+x1].mean(-1).mean(-1)
 
-
-# import seaborn as sns
-
-# sns.set_style('whitegrid')
-# plt.figure(figsize=[5, 10])
-# for i in range(15):
-#     plt.subplot(15, 1, i+1)
-#     plt.plot(tcs[i, 0, :], color = 'b')
-#     plt.plot(tcs[i, 1, :], color = 'r')
-
-# plt.figure(figsize=[5, 10])
-# for i in range(15):
-#     plt.subplot(15, 1, i+1)
-#     plt.plot(tcs[i, 2, :], color = 'r')
-#     plt.plot(tcs[i, 3, :], color = 'b')
-
-
-# #%%
-
-from matplotlib.patches import Rectangle
 plt.figure(figsize = [10, 3])
+plt.imshow(trials_dff.mean(0),  cmap = 'binary', vmax = 0.05)
 
-plt.imshow(dm, cmap = 'bwr', vmin = -m_val, vmax = m_val)
+cl = sns.light_palette("navy", reverse=True)
 
-for ii in range(3):
+for ii in range(1):
     for jj in range(5):
         for m_no, (y0, y1, x0, x1) in enumerate(masks):
-            curr_rect = Rectangle((128*jj+x0, 52*ii+y0), 10, 10, fill = None, color = [0, 0, 0])
+            curr_rect = Rectangle((128*jj+x0, 52*ii+y0), 15, 15, fill = None, color = cl[m_no])
             plt.gca().add_patch(curr_rect)
 
 #%%
-tmp = tcs[:, :, 50:-30].reshape([15, 2, 9, 40])
+import seaborn as sns
+tmp = tcs[:, :, 60:].reshape([5, 4, 10, 160])
 or_color = '#FF6600'
 
-plt.figure(figsize = [10, 5])
-for slice_n in range(3):
-    plt.subplot(2,3,slice_n+1)
-    sns.tsplot(tmp[slice_n, 0, :, :]+0.2, color = 'k')
-    sns.tsplot(tmp[slice_n, 1, :, :]+0.2, color = or_color)
+plt.figure(figsize = [20, 10])
+for slice_n in range(len(fns)):
+    plt.subplot(3,5,slice_n+1)
+    for i in range(4):
+        sns.tsplot(tmp[slice_n, i, :, :]+0.1, time = np.linspace(0.5, 80, 160), color = cl[i])
     plt.title('slice_numebr %d' % slice_n)
-    plt.ylim([-0.1, 0.8])
-
-for cnt, slice_n in enumerate(range(9, 12)):
-    plt.subplot(2,3,4+cnt)
-    #sns.tsplot(tmp[slice_n, 2, :, :]+0.2, color = 'r')
-    sns.tsplot(tmp[slice_n, 1, :, :]+0.2, color = or_color)
-    sns.tsplot(tmp[slice_n, 0, :, :]+0.2, color = 'k')
-    
-    plt.title('slice_numebr %d' % slice_n)
-    plt.ylim([-0.1, 0.8])
-
-#plt.savefig('/data/fUS_project/visualization/sfn2019_timecourse_for_frank_shifted.pdf');
-
-#%%
+    plt.ylim([-0.2, 0.8])
 
 
-#%%

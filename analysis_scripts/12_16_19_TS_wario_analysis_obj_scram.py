@@ -36,9 +36,9 @@ from PIL import Image
 ##################################################################
 # Load the fUS data
 ##################################################################
-data_dir = '/data/fUS_project/data/data_sep25'
+data_dir = '/data/fUS_project/data/data_dec16'
 fns = sorted(glob.glob(data_dir + '/RT*.mat')); # NOW DO THE LAST 15
-timelines = len(fns)*[data_dir + '/timeline_09-25-2019_11-44.mat']
+timelines = len(fns)*[data_dir + '/timeline_12-16-2019_10-48.mat']
 n_fus = range(len(fns))
 n_stim = range(len(fns))
 
@@ -52,7 +52,7 @@ fus_rate =  2; # THIS EXPEIMENT WAS 2 HZ
 all_exp_dicts = []
 
 # Export tiffs of all experiments
-for ii in range(15):
+for ii in range(len(fns)):
     animal_fn, timeline_fn, exp_number, exp_number_fus, exp_number_stim = all_exps[ii]
     outDir, sub_fn = os.path.split(animal_fn)
     exportDir = outDir + '/extras_obj_scram/'
@@ -73,7 +73,7 @@ for ii in range(15):
         timestamps_m = scio.matloader();
         timestamps_m.loadmat_h5(timeline_fn); #timestamps_m.summary()
         ts = timestamps_m.data['timestamps'].copy()
-        stim_list, times = scana.parse_timestamps(timestamps_m.data['data'][:,1], ts, min_isi = 0, interval_between_experiments = 4,  min_number_exp = 100); # Separate the frames for each one...
+        stim_list, times = scana.parse_timestamps(timestamps_m.data['data'][:,1], ts, min_isi = 0, interval_between_experiments = 1,  min_number_exp = 100); # Separate the frames for each one...
         fus_list, times = scana.parse_timestamps(timestamps_m.data['data'][:,0], ts, min_isi = 0.2, interval_between_experiments = 10,  min_number_exp = 100); # Separate the frames for each one...
         for tmp_ss, tmp_ff in zip(stim_list, fus_list):
             print('Number of frames stim: %d // fus: %d' % (len(tmp_ss), len(tmp_ff)))
@@ -134,7 +134,6 @@ do_save = True
 nWide = 5;
 nHigh = 3;
 
-
 n_fus_frames = all_exp_dicts[0]['data_raw'].shape[0]
 all_trials_raw = np.zeros([n_fus_frames, nHigh*nY, nWide*nX])
 all_trials_raw_fix = np.zeros([n_fus_frames, nHigh*nY, nWide*nX])
@@ -143,7 +142,7 @@ all_trials_raw_medfilt = np.zeros([n_fus_frames, nHigh*nY, nWide*nX])
 nF_stim = nT
 all_trials_resampled_at_stim = np.zeros([nF_stim, nHigh*nY, nWide*nX])
 
-for i in range(15):
+for i in range(len(fns)):
     a, b = np.unravel_index(i, [nHigh, nWide])
     exp_dict = all_exp_dicts[i]
 
@@ -177,7 +176,7 @@ trials_dff              = (trials_dff - f0)/f0
 if do_save:
     scio.export_tiffs(trials_dff, exportDir + stim_name + '_trial_synchronized_toDFF.tiff', dims = {'x':2, 'y':1, 't':0})
 
-trials_tmp = trials_dff[40:, :, :]# Chop off 30 sec gray
+trials_tmp = trials_dff[50:, :, :]# Chop off 30 sec gray
 trial_average = trials_tmp.reshape([10, 40, nHigh*nY, nWide*nX]).mean(axis=0)
 combined = trial_average
 
